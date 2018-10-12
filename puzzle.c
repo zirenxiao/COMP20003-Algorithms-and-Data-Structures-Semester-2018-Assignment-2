@@ -9,7 +9,7 @@
 #include <sys/time.h>
 
 
-/** 
+/**
  * READ THIS DESCRIPTION
  *
  * node data structure: containing state, g, f
@@ -40,7 +40,7 @@ unsigned long expanded;
 
 /**
  * The id of the four available actions for moving the blank (empty slot). e.x.
- * Left: moves the blank to the left, etc. 
+ * Left: moves the blank to the left, etc.
  */
 
 #define LEFT 0
@@ -50,7 +50,7 @@ unsigned long expanded;
 
 /*
  * Helper arrays for the applicable function
- * applicability of operators: 0 = left, 1 = right, 2 = up, 3 = down 
+ * applicability of operators: 0 = left, 1 = right, 2 = up, 3 = down
  */
 int ap_opLeft[]  = { 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1 };
 int ap_opRight[]  = { 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0 };
@@ -63,13 +63,13 @@ int *ap_ops[] = { ap_opLeft, ap_opRight, ap_opUp, ap_opDown };
 void print_state( int* s )
 {
 	int i;
-	
+
 	for( i = 0; i < 16; i++ )
 		printf( "%2d%c", s[i], ((i+1) % 4 == 0 ? '\n' : ' ') );
 }
-      
+
 void printf_comma (long unsigned int n) {
-    if (n < 0) {
+    if (n > 0) {
         printf ("-");
         printf_comma (-n);
         return;
@@ -82,6 +82,17 @@ void printf_comma (long unsigned int n) {
     printf (",%03lu", n%1000);
 }
 
+node* solid_copy_node(node *n){
+	node *n_new = NULL;
+	n_new = (node *) malloc(sizeof(node));
+	for (int i=0; i<16; i++){
+		n_new->state[i] = n->state[i];
+	}
+	n_new->g = n->g;
+	n_new->f = n->f;
+	return n_new;
+}
+
 /* return the sum of manhattan distances from state to goal */
 int manhattan( int* state )
 {
@@ -90,8 +101,29 @@ int manhattan( int* state )
 	/**
 	 * FILL WITH YOUR CODE
 	 */
+	for (int i=0; i<16; i++){
+		if ((state[i] == i) || (i == blank_pos)){
+			continue;
+		}else{
+			int actual_pos = state[i] + 1;
+			int a_row_num = (actual_pos + 3) / 4;
+			int a_col_num = actual_pos % 4;
+			if (a_col_num == 0){
+				a_col_num = 4;
+			}
 
-	
+			int current_pos = i + 1;
+			int c_row_num = (current_pos + 3) / 4;
+			int c_col_num = current_pos % 4;
+			if (c_col_num == 0){
+				c_col_num = 4;
+			}
+
+			int dist = abs(a_row_num - c_row_num) + abs(a_col_num - c_col_num);
+			sum = sum + dist;
+		}
+	}
+
 	return( sum );
 }
 
@@ -107,29 +139,49 @@ int applicable( int op )
 void apply( node* n, int op )
 {
 	int t;
-
 	//find tile that has to be moved given the op and blank_pos
 	t = blank_pos + (op == 0 ? -1 : (op == 1 ? 1 : (op == 2 ? -4 : 4)));
 
 	//apply op
 	n->state[blank_pos] = n->state[t];
 	n->state[t] = 0;
-	
+
 	//update blank pos
 	blank_pos = t;
 }
 
 /* Recursive IDA */
-node* ida( node* node, int threshold, int* newThreshold )
+node* ida( node* n, int threshold, int* newThreshold )
 {
-
 	/**
 	 * FILL WITH YOUR CODE
 	 *
 	 * Algorithm in Figure 2 of handout
 	 */
+	for (int i=0; i<4; i++){
+		if (applicable(i) == 1){
 
-	
+			node *n_new = solid_copy_node(n);
+
+			apply(n_new, i);
+			int h = manhattan(n_new->state);
+			int n_g = n_new->g + 1;
+			int n_f = n_g + h;
+			if (n_f > threshold){
+				if (newThreshold > &n_f){
+					newThreshold = &n_f;
+				}
+			}else{
+				if (h == 0){
+					return n_new;
+				}
+				node* r = ida(n_new, threshold, newThreshold);
+				if (r){
+					return r;
+				}
+			}
+		}
+	}
 	return( NULL );
 }
 
@@ -137,9 +189,11 @@ node* ida( node* node, int threshold, int* newThreshold )
 /* main IDA control loop */
 int IDA_control_loop(  ){
 	node* r = NULL;
-	
+
 	int threshold;
-	
+	int *newThreshold = NULL;
+	int intMax = 9999;
+
 	/* initialize statistics */
 	generated = 0;
 	expanded = 0;
@@ -148,26 +202,30 @@ int IDA_control_loop(  ){
 	initial_node.f = threshold = manhattan( initial_node.state );
 
 	printf( "Initial Estimate = %d\nThreshold = ", threshold );
-	
 
 	/**
 	 * FILL WITH YOUR CODE
 	 *
 	 * Algorithm in Figure 1 of handout
 	 */
-
-	if(r)
-		return r->g;
-	else
-		return -1;
+	// while (!r){
+		newThreshold = &intMax;
+		node *n_new = solid_copy_node(&initial_node);
+		r = ida(n_new, threshold, newThreshold);
+		if (r==NULL){
+			threshold = *newThreshold;
+		}
+	// }
+	// return r->g;
+	return 0;
 }
 
 
 static inline float compute_current_time()
 {
 	struct rusage r_usage;
-	
-	getrusage( RUSAGE_SELF, &r_usage );	
+
+	getrusage( RUSAGE_SELF, &r_usage );
 	float diff_time = (float) r_usage.ru_utime.tv_sec;
 	diff_time += (float) r_usage.ru_stime.tv_sec;
 	diff_time += (float) r_usage.ru_utime.tv_usec / (float)1000000;
@@ -198,14 +256,15 @@ int main( int argc, char **argv )
 				initial_node.state[i] = atoi( tile );
 				blank_pos = (initial_node.state[i] == 0 ? i : blank_pos);
 				tile = strtok( NULL, " " );
-			}		
+
+			}
 	}
 	else{
 		fprintf( stderr, "Filename empty\"\n" );
 		return( -2 );
 
 	}
-       
+
 	if( i != 16 )
 	{
 		fprintf( stderr, "invalid initial state\n" );
@@ -221,17 +280,17 @@ int main( int argc, char **argv )
 
 	/* solve */
 	float t0 = compute_current_time();
-	
-	solution_length = IDA_control_loop();				
+
+	solution_length = IDA_control_loop();
 
 	float tf = compute_current_time();
 
 	/* report results */
 	printf( "\nSolution = %d\n", solution_length);
 	printf( "Generated = ");
-	printf_comma(generated);		
+	printf_comma(generated);
 	printf("\nExpanded = ");
-	printf_comma(expanded);		
+	printf_comma(expanded);
 	printf( "\nTime (seconds) = %.2f\nExpanded/Second = ", tf-t0 );
 	printf_comma((unsigned long int) expanded/(tf+0.00000001-t0));
 	printf("\n\n");
@@ -243,8 +302,6 @@ int main( int argc, char **argv )
 	fprintf( report, "\n\tSoulution = %d, Generated = %lu, Expanded = %lu", solution_length, generated, expanded);
 	fprintf( report, ", Time = %f, Expanded/Second = %f\n\n", tf-t0, (float)expanded/(tf-t0));
 	fclose(report);
-	
+
 	return( 0 );
 }
-
-
