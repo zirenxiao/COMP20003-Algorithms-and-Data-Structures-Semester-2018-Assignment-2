@@ -19,6 +19,7 @@ typedef struct node{
 	int state[16];
 	int g;
 	int f;
+	struct node* next;
 } node;
 
 /**
@@ -90,7 +91,46 @@ node* solid_copy_node(node *n){
 	}
 	n_new->g = n->g;
 	n_new->f = n->f;
+	n_new->next = NULL;
 	return n_new;
+}
+
+node* add_to_path( node* n, node* root){
+	if (root!=NULL){
+		root->next = add_to_path(n, root->next);
+	}else{
+		root = solid_copy_node(n);
+	}
+	return root;
+}
+
+int path_length( node* n ){
+	node *next = n;
+	int count = 0;
+	while (next!=NULL){
+		count++;
+		next = next->next;
+	}
+	return count;
+}
+
+int is_in_path( node* n, node* root ){
+	node *next = root;
+	while (next!=NULL){
+		int count = 0;
+		for (int i=0; i<16; i++){
+			if (next->state[i] == n->state[i]){
+				// found difference
+				count++;
+			}
+			if (count == 16){
+				return 1;
+			}
+		}
+		next = next->next;
+	}
+	return 0;
+
 }
 
 /* return the sum of manhattan distances from state to goal */
@@ -151,32 +191,32 @@ void apply( node* n, int op )
 }
 
 /* Recursive IDA */
-node* ida( node* n, int threshold, int* newThreshold )
+node* ida( node* n, int threshold, int* newThreshold, node* path )
 {
 	/**
 	 * FILL WITH YOUR CODE
 	 *
 	 * Algorithm in Figure 2 of handout
 	 */
+
 	for (int i=0; i<4; i++){
-		if (applicable(i) == 1){
-
+		if ((applicable(i) == 1) && (is_in_path(n, path)==0)){
 			node *n_new = solid_copy_node(n);
-
 			apply(n_new, i);
+			path = add_to_path(n, path);
 			int h = manhattan(n_new->state);
 			int n_g = n_new->g + 1;
 			int n_f = n_g + h;
 			if (n_f > threshold){
-				if (newThreshold > &n_f){
+				if (newThreshold >= &n_f){
 					newThreshold = &n_f;
 				}
 			}else{
 				if (h == 0){
 					return n_new;
 				}
-				node* r = ida(n_new, threshold, newThreshold);
-				if (r){
+				node* r = ida(n_new, threshold, newThreshold, path);
+				if (r!=NULL){
 					return r;
 				}
 			}
@@ -184,6 +224,8 @@ node* ida( node* n, int threshold, int* newThreshold )
 	}
 	return( NULL );
 }
+
+
 
 
 /* main IDA control loop */
@@ -197,6 +239,7 @@ int IDA_control_loop(  ){
 	/* initialize statistics */
 	generated = 0;
 	expanded = 0;
+	newThreshold = &intMax;
 
 	/* compute initial threshold B */
 	initial_node.f = threshold = manhattan( initial_node.state );
@@ -208,16 +251,18 @@ int IDA_control_loop(  ){
 	 *
 	 * Algorithm in Figure 1 of handout
 	 */
-	// while (!r){
-		newThreshold = &intMax;
+
+	while (r==NULL){
+		node *path = NULL;
 		node *n_new = solid_copy_node(&initial_node);
-		r = ida(n_new, threshold, newThreshold);
+		r = ida(n_new, threshold, newThreshold, path);
 		if (r==NULL){
+			// printf("New threshold %d\n", *newThreshold);
 			threshold = *newThreshold;
 		}
-	// }
-	// return r->g;
-	return 0;
+	}
+	return r->g;
+	// return 0;
 }
 
 
