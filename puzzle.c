@@ -7,6 +7,8 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <malloc.h>
+
 
 
 /**
@@ -19,7 +21,6 @@ typedef struct node{
 	int state[16];
 	int g;
 	int f;
-	struct node* next;
 } node;
 
 /**
@@ -70,7 +71,7 @@ void print_state( int* s )
 }
 
 void printf_comma (long unsigned int n) {
-    if (n > 0) {
+    if (n < 0) {
         printf ("-");
         printf_comma (-n);
         return;
@@ -83,87 +84,23 @@ void printf_comma (long unsigned int n) {
     printf (",%03lu", n%1000);
 }
 
-node* solid_copy_node(node *n){
-	node *n_new = NULL;
-	n_new = (node *) malloc(sizeof(node));
-	for (int i=0; i<16; i++){
-		n_new->state[i] = n->state[i];
-	}
-	n_new->g = n->g;
-	n_new->f = n->f;
-	n_new->next = NULL;
-	return n_new;
-}
-
-node* add_to_path( node* n, node* root){
-	if (root!=NULL){
-		root->next = add_to_path(n, root->next);
-	}else{
-		root = solid_copy_node(n);
-	}
-	return root;
-}
-
-int path_length( node* n ){
-	node *next = n;
-	int count = 0;
-	while (next!=NULL){
-		count++;
-		next = next->next;
-	}
-	return count;
-}
-
-int is_in_path( node* n, node* root ){
-	node *next = root;
-	while (next!=NULL){
-		int count = 0;
-		for (int i=0; i<16; i++){
-			if (next->state[i] == n->state[i]){
-				// found difference
-				count++;
-			}
-			if (count == 16){
-				return 1;
-			}
-		}
-		next = next->next;
-	}
-	return 0;
-
-}
-
 /* return the sum of manhattan distances from state to goal */
 int manhattan( int* state )
 {
 	int sum = 0;
 
-	/**
-	 * FILL WITH YOUR CODE
-	 */
-	for (int i=0; i<16; i++){
-		if ((state[i] == i) || (i == blank_pos)){
-			continue;
-		}else{
-			int actual_pos = state[i] + 1;
-			int a_row_num = (actual_pos + 3) / 4;
-			int a_col_num = actual_pos % 4;
-			if (a_col_num == 0){
-				a_col_num = 4;
-			}
-
-			int current_pos = i + 1;
-			int c_row_num = (current_pos + 3) / 4;
-			int c_col_num = current_pos % 4;
-			if (c_col_num == 0){
-				c_col_num = 4;
-			}
-
-			int dist = abs(a_row_num - c_row_num) + abs(a_col_num - c_col_num);
-			sum = sum + dist;
-		}
+	int i = 0;
+	for(i = 0; i < 16; i++){
+		if(state[i] == 0) continue;
+		int x = i % 4;
+		int y = i / 4;
+		int tx = state[i] % 4;
+		int ty = state[i] / 4;
+		int dx = tx > x ? tx - x : x - tx;
+		int dy = ty > y ? ty - y : y - ty;
+		sum += (dx + dy);
+		// printf("%d %d %d\n", i, state[i], dx+dy);
 	}
-
 	return( sum );
 }
 
@@ -179,6 +116,7 @@ int applicable( int op )
 void apply( node* n, int op )
 {
 	int t;
+
 	//find tile that has to be moved given the op and blank_pos
 	t = blank_pos + (op == 0 ? -1 : (op == 1 ? 1 : (op == 2 ? -4 : 4)));
 
@@ -191,41 +129,53 @@ void apply( node* n, int op )
 }
 
 /* Recursive IDA */
-node* ida( node* n, int threshold, int* newThreshold, node* path )
+node* ida( node* n, int threshold, int* newThreshold )
 {
+
 	/**
 	 * FILL WITH YOUR CODE
 	 *
 	 * Algorithm in Figure 2 of handout
 	 */
-
-	for (int i=0; i<4; i++){
-		if ((applicable(i) == 1) && (is_in_path(n, path)==0)){
-			node *n_new = solid_copy_node(n);
-			apply(n_new, i);
-			path = add_to_path(n, path);
-			int h = manhattan(n_new->state);
-			int n_g = n_new->g + 1;
-			int n_f = n_g + h;
-			if (n_f > threshold){
-				if (newThreshold >= &n_f){
-					newThreshold = &n_f;
+	int action = 0;
+	for(action = 0; action < 4; action++){
+		struct node n_node;
+		generated++;
+		for(int i = 0; i < 16; i++) {
+			if(n->state[i] == 0) blank_pos = i;
+		}
+		if(applicable(action)){
+			for(int i = 0; i < 16; i++) {
+				n_node.state[i] = n->state[i];
+			}
+			apply(&n_node, action);
+			// print_state(n_node.state);
+			n_node.g = n->g + 1;
+			n_node.f = n_node.g + manhattan(n_node.state);
+			if(n_node.f > threshold){
+				*newThreshold = n_node.f < *newThreshold ? n_node.f : *newThreshold;
+				// printf("%d ", *newThreshold);
+			}
+			else{
+				if(manhattan(n_node.state) == 0){
+					// print_state(n_node.state);
+					n->f = n_node.f;
+					n->g = n_node.g;
+					memcpy(n->state, n_node.state, 16);
+					return n;
 				}
-			}else{
-				if (h == 0){
-					return n_new;
-				}
-				node* r = ida(n_new, threshold, newThreshold, path);
-				if (r!=NULL){
+				expanded++;
+				struct node *r;
+				r = ida(&n_node, threshold, newThreshold);
+				if(r != NULL){
 					return r;
 				}
 			}
 		}
 	}
+
 	return( NULL );
 }
-
-
 
 
 /* main IDA control loop */
@@ -233,36 +183,40 @@ int IDA_control_loop(  ){
 	node* r = NULL;
 
 	int threshold;
-	int *newThreshold = NULL;
-	int intMax = 9999;
 
 	/* initialize statistics */
 	generated = 0;
 	expanded = 0;
-	newThreshold = &intMax;
 
 	/* compute initial threshold B */
-	initial_node.f = threshold = manhattan( initial_node.state );
+	initial_node.f = manhattan( initial_node.state );
+	threshold = initial_node.f;
 
 	printf( "Initial Estimate = %d\nThreshold = ", threshold );
+
 
 	/**
 	 * FILL WITH YOUR CODE
 	 *
 	 * Algorithm in Figure 1 of handout
 	 */
-
-	while (r==NULL){
-		node *path = NULL;
-		node *n_new = solid_copy_node(&initial_node);
-		r = ida(n_new, threshold, newThreshold, path);
-		if (r==NULL){
-			// printf("New threshold %d\n", *newThreshold);
-			threshold = *newThreshold;
+		while (r == NULL){
+			int newB = 99999999;
+			struct node n;
+			generated++;
+			for(int i = 0; i < 16; i++) n.state[i] = initial_node.state[i];
+			n.g = 0;
+			r = ida(&n, threshold, &newB);
+			printf("%d ", threshold);
+			if(r == NULL){
+				threshold = newB;
+			}
 		}
-	}
-	return r->g;
-	// return 0;
+
+	if(r)
+		return r->g;
+	else
+		return -1;
 }
 
 
@@ -301,7 +255,6 @@ int main( int argc, char **argv )
 				initial_node.state[i] = atoi( tile );
 				blank_pos = (initial_node.state[i] == 0 ? i : blank_pos);
 				tile = strtok( NULL, " " );
-
 			}
 	}
 	else{
